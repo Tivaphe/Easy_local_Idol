@@ -105,7 +105,22 @@ outputs/                           fichiers .ply générés
 - `torch.compile` (accélération d'environ 1,7x du SDK) est désactivé pour rester stable sous Windows.
 - Idol est un modèle de recherche : la qualité varie selon les images (objets isolés sur fond simple = meilleurs résultats).
 
+## Crédits
+
+- [speridlabs/idol](https://huggingface.co/spaces/speridlabs/idol) — modèle Idol et démo officielle.
+  Le code du dossier `idol/` est le SDK officiel (Apache-2.0, © speridlabs), voir `idol/LICENSE-IDOL-SDK`.
+- [facebook/dinov3-vith16plus-pretrain-lvd1689m](https://huggingface.co/facebook/dinov3-vith16plus-pretrain-lvd1689m) — encodeur DINOv3 (© Meta, licence DINOv3).
+- [black-forest-labs/FLUX.2-dev](https://huggingface.co/black-forest-labs/FLUX.2-dev) — encodeur VAE FLUX.2 (© Black Forest Labs, licence non commerciale).
+- Miroirs non gated utilisés par défaut : [LibreYOLO/LibreDINOv3vith16plus](https://huggingface.co/LibreYOLO/LibreDINOv3vith16plus),
+  [unsloth/FLUX.2-dev](https://huggingface.co/unsloth/FLUX.2-dev) (sous-dossier `vae/`).
+- Images d'`examples/` issues de la démo officielle.
+- [Gradio](https://www.gradio.app), [PyTorch](https://pytorch.org), [bitsandbytes](https://github.com/bitsandbytes-foundation/bitsandbytes) — dépendances principales.
+
+Les poids de modèle ont leurs propres licences (dont une licence non commerciale pour FLUX.2-dev) : elles
+s'appliquent indépendamment de la licence de ce code.
+
 ## Licence
 
-Le code d'Idol (`idol/`) est sous Apache-2.0, copyright speridlabs. Les poids et les encodeurs ont leurs propres licences,
-à consulter sur leurs pages Hugging Face.
+Le code de ce dépôt (interface, moteur, lanceurs, scripts) est sous **Apache-2.0**, voir le fichier `LICENSE`.
+Le code d'Idol (`idol/`) est le SDK officiel, sous Apache-2.0, copyright speridlabs, voir `idol/LICENSE-IDOL-SDK`.
+Les poids et les encodeurs ont leurs propres licences, à consulter sur leurs pages Hugging Face (voir *Crédits*).
