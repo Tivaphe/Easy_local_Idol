@@ -1,0 +1,11 @@
+# Dépendances Python d'Idol. PyTorch/torchvision sont installés par launcher.py (voir constraints.txt).
+gradio==5.49.1
+huggingface_hub>=0.34,<2
+transformers>=4.56,<5
+diffusers>=0.36
+safetensors>=0.4
+tensordict>=0.8
+numpy>=1.26
+pillow>=10.0
+plyfile>=1.0
+tqdm>=4.66

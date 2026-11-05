@@ -1,0 +1,4 @@
+# Verrouille PyTorch et torchvision (paire CUDA installée par launcher.py).
+# Sans cela, pip remplace torch par la version PyPI, qui ne correspond pas à torchvision.
+torch==2.8.0
+torchvision==0.23.0
