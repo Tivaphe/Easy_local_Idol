@@ -194,7 +194,7 @@ class LocalIdol(IdolPipeline):
 
     def _load_dinov3(self, repo, dtype):
         from transformers import AutoModel
-        model = AutoModel.from_pretrained(repo, torch_dtype=dtype)
+        model = AutoModel.from_pretrained(repo, dtype=dtype)
         return model.eval().requires_grad_(False)
 
     def _load_dinov3_quantized(self, repo, kind, dtype):
@@ -204,7 +204,7 @@ class LocalIdol(IdolPipeline):
         else:
             quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4', bnb_4bit_compute_dtype=dtype,
                                        bnb_4bit_use_double_quant=True)
-        model = AutoModel.from_pretrained(repo, quantization_config=quant, torch_dtype=dtype,
+        model = AutoModel.from_pretrained(repo, quantization_config=quant, dtype=dtype,
                                           device_map={'': 0})
         return model.eval().requires_grad_(False)
 

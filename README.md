@@ -115,6 +115,9 @@ LICENSE                            licence Apache-2.0 du dépôt
 - **« PyTorch ne voit pas le GPU »** : mettez à jour le pilote NVIDIA, supprimez le dossier `.venv` et relancez.
 - **« Accès refusé » à un encodeur** : Idol bascule normalement sur les miroirs. Pour les dépôts officiels, acceptez leurs conditions et vérifiez le jeton.
 - **INT8 / NF4 indisponibles** : bitsandbytes n'a pas pu être installé ; FP16 reste disponible. Relancez le script.
+- **Erreur « requires accelerate »** : dépendance manquante dans un `.venv` créé avant sa mise à jour —
+  relancez `Lancer_Idol.bat` / `lancer_idol.sh` (l'installation se met à jour automatiquement), ou
+  `.venv\Scripts\pip install accelerate` (Windows) / `.venv/bin/pip install accelerate` (Linux).
 - **Port 7860 occupé** : `IDOL_PORT=7870` (Linux) ou définissez la variable d'environnement avant de lancer `app.py`.
 
 ## Limites honnêtes

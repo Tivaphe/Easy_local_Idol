@@ -2,6 +2,7 @@
 gradio==5.49.1
 huggingface_hub>=0.34,<2
 transformers>=4.56,<5
+accelerate>=1.0
 diffusers>=0.36
 safetensors>=0.4
 tensordict>=0.8
