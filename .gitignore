@@ -1,0 +1,15 @@
+# Environnement Python (plusieurs Go)
+.venv/
+
+# Fichiers générés
+outputs/
+*.ply
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Système
+.DS_Store
+Thumbs.db

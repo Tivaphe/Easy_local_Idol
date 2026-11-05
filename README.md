@@ -75,16 +75,38 @@ La quantification se fait au chargement : aucun fichier supplémentaire à tél�
 Si une génération échoue avec « mémoire GPU insuffisante » : passez en **INT8**, puis en **NF4**, ou
 réduisez les Gaussiennes à 131 072.
 
+## Test rapide (smoke test)
+
+Pour valider votre configuration — notamment les modes rarement testés (mémoire *économique*, INT8, NF4) :
+
+```bash
+# Linux (dossier du dépôt, après un premier lancement)
+.venv/bin/python smoke_test.py --all
+
+# Windows (invite de commandes dans le dossier du dépôt)
+.venv\Scripts\python smoke_test.py --all
+```
+
+Chaque combinaison charge le modèle, génère un vrai objet (65 536 gaussiennes, 10 étapes), écrit le `.ply`
+dans `outputs/smoke/` puis décharge le modèle. Le résultat s'affiche en **PASS / FAIL** avec la durée et la
+pointe de VRAM ; le code retour est non nul en cas d'échec. Sans `--all`, seule la combinaison demandée est
+testée (`--precision fp16|int8|nf4`, `--memory standard|economy`).
+
 ## Structure du dossier
 
 ```
 Lancer_Idol.bat / lancer_idol.sh   point d'entrée (Windows / Linux)
 launcher.py                        installation (PyTorch CUDA, dépendances) et lancement
 app.py                             interface web (Gradio)
+presets.py                         liste des exemples (presets.json, ou génération auto s'il manque)
 engine.py                          chargement, quantification, gestion de la mémoire GPU
+smoke_test.py                      test rapide des combinaisons précision × mémoire
 idol/                              code de l'SDK officiel (Apache-2.0, voir idol/LICENSE-IDOL-SDK)
-examples/                          images d'exemple de la démo officielle
+                                   (seule modification locale : callback de progression optionnel dans sampler.py)
+examples/                          images d'exemple de la démo officielle (+ presets.json)
 outputs/                           fichiers .ply générés
+LICENSE                            licence Apache-2.0 du dépôt
+.github/workflows/ci.yml           intégration continue (syntaxe, presets, shellcheck)
 ```
 
 ## Dépannage
@@ -97,8 +119,9 @@ outputs/                           fichiers .ply générés
 
 ## Limites honnêtes
 
-- Le code de gestion mémoire (déchargement, INT8/NF4) n'a pas encore été testé sur une vraie carte NVIDIA.
-  Premier lancement : si une étape échoue, copiez le message d'erreur complet.
+- Le code de gestion mémoire (déchargement, INT8/NF4) n'a pas encore été validé sur toutes les cartes NVIDIA.
+  Lancez `smoke_test.py --all` (voir *Test rapide*) pour vérifier le vôtre ; si une étape échoue, copiez le
+  message d'erreur complet.
 - Les chiffres de VRAM sont des estimations (le SDK annonce 7,2 Go de pic sans déchargement).
 - La quantification INT8 / NF4 est faite par l'application. Il n'existe pas aujourd'hui de version quantifiée officielle
   pour CUDA : les variantes publiées sur Hugging Face sont pour Apple (MLX) ou le navigateur (WebGPU).

@@ -4,7 +4,6 @@ Lancement : via launcher.py (Windows : Lancer_Idol.bat, Linux : lancer_idol.sh),
     python app.py
 """
 import gc
-import json
 import os
 import random
 import threading
@@ -15,11 +14,12 @@ import gradio as gr
 import torch
 
 from engine import PRECISIONS, EngineError, LocalIdol, bitsandbytes_available, gpu_info, resolve_auto
+from presets import load_presets
 
 APP_DIR = Path(__file__).parent
 OUTPUT_DIR = APP_DIR / 'outputs'
 OUTPUT_DIR.mkdir(exist_ok=True)
-PRESETS = json.loads((APP_DIR / 'examples' / 'presets.json').read_text(encoding='utf-8'))
+PRESETS = load_presets(APP_DIR)
 
 MODES = {'Objet synthétique (rendu, image générée)': 'synthetic', 'Photo réelle': 'real'}
 MODE_LABEL = {v: k for k, v in MODES.items()}
@@ -58,7 +58,13 @@ class Manager:
             self.key = None
             gc.collect()
             torch.cuda.empty_cache()
-        self.engine = LocalIdol(precision=precision, low_vram=low_vram, log=log)
+        try:
+            self.engine = LocalIdol(precision=precision, low_vram=low_vram, log=log)
+        except BaseException:
+            # Chargement échoué (réseau, OOM...) : rien ne doit rester en VRAM.
+            gc.collect()
+            torch.cuda.empty_cache()
+            raise
         self.key = key
         return self.engine
 
@@ -131,21 +137,30 @@ def generate(image, input_type, steps, cfg_strength, rescale_t, seed, randomize,
 
     def log(msg):
         logs.append(msg)
-        progress(0.0, desc=msg)
+        progress(state['frac'], desc=msg)
 
+    state = {'frac': 0.0}
     t0 = time.time()
     with MANAGER.lock:
         try:
             engine = MANAGER.get(prec, low, log)
-            progress(0.5, desc='Génération en cours...')
+            state['frac'] = 0.4
+            progress(0.4, desc='Modèle prêt, génération...')
+
+            def on_step(i, n):
+                state['frac'] = 0.45 + 0.45 * (i + 1) / n
+                progress(state['frac'], desc=f'Étape {i + 1} / {n}')
+
             output = engine(image, mode=MODES.get(input_type, input_type), seed=seed, steps=steps,
-                            cfg_strength=cfg_strength, rescale_t=rescale_t, num_gaussians=GAUSSIANS.get(gaussians, gaussians))
+                            cfg_strength=cfg_strength, rescale_t=rescale_t,
+                            num_gaussians=GAUSSIANS.get(gaussians, gaussians), on_step=on_step)
         except EngineError as e:
             raise gr.Error(str(e))
         except torch.OutOfMemoryError:
+            gc.collect()
             torch.cuda.empty_cache()
-            raise gr.Error('Mémoire GPU insuffisante. Essayez la précision INT8 ou NF4, passez la mémoire en '
-                           '« Économique », ou réduisez le nombre de Gaussiennes.')
+            raise gr.Error('Mémoire GPU insuffisante (chargement ou génération). Essayez la précision INT8 ou '
+                           'NF4, passez la mémoire en « Économique », ou réduisez le nombre de Gaussiennes.')
         ply = OUTPUT_DIR / f'idol-{time.strftime("%Y%m%d-%H%M%S")}-seed{seed}.ply'
         output.gaussian.save_ply(str(ply))
     elapsed = time.time() - t0
