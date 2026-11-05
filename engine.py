@@ -194,7 +194,7 @@ class LocalIdol(IdolPipeline):
 
     def _load_dinov3(self, repo, dtype):
         from transformers import AutoModel
-        model = AutoModel.from_pretrained(repo, torch_dtype=dtype)
+        model = AutoModel.from_pretrained(repo, dtype=dtype)
         return model.eval().requires_grad_(False)
 
     def _load_dinov3_quantized(self, repo, kind, dtype):
@@ -204,7 +204,7 @@ class LocalIdol(IdolPipeline):
         else:
             quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type='nf4', bnb_4bit_compute_dtype=dtype,
                                        bnb_4bit_use_double_quant=True)
-        model = AutoModel.from_pretrained(repo, quantization_config=quant, torch_dtype=dtype,
+        model = AutoModel.from_pretrained(repo, quantization_config=quant, dtype=dtype,
                                           device_map={'': 0})
         return model.eval().requires_grad_(False)
 
@@ -227,7 +227,7 @@ class LocalIdol(IdolPipeline):
 
     @torch.no_grad()
     def __call__(self, image, mode='synthetic', seed=42, steps=50, cfg_strength=3.0, rescale_t=3.0,
-                 num_gaussians=262144, crop_margin=None, verbose=False) -> IdolOutput:
+                 num_gaussians=262144, crop_margin=None, verbose=False, on_step=None) -> IdolOutput:
         if isinstance(image, str):
             image = Image.open(image)
         with self._on_gpu(self.background_remover):
@@ -244,7 +244,7 @@ class LocalIdol(IdolPipeline):
         with self._on_gpu(self.denoiser):
             sample = sample_flow(self.denoiser, noise, cond=cond, neg_cond=cond.apply(torch.zeros_like),
                                  steps=steps, rescale_t=rescale_t, cfg_strength=cfg_strength, verbose=verbose,
-                                 batch_cfg=False)
+                                 batch_cfg=False, callback=on_step)
         with self._on_gpu(self.decoder, self.decoder_gs):
             gaussian = self.decode(sample['latent'], num_gaussians)
         from idol.camera import decode_camera
@@ -252,6 +252,9 @@ class LocalIdol(IdolPipeline):
                           camera=decode_camera(sample['camera'][0, 0]))
 
     def unload(self):
+        # _pinned contient des références vers des modules quantifiés : sans clear(),
+        # gc.collect() ne libère pas leur VRAM et le rechargement suivant peut déborder.
+        self._pinned.clear()
         for name in ('denoiser', 'decoder', 'decoder_gs', 'background_remover', 'image_encoder'):
             if hasattr(self, name):
                 delattr(self, name)

@@ -4,7 +4,6 @@ Lancement : via launcher.py (Windows : Lancer_Idol.bat, Linux : lancer_idol.sh),
     python app.py
 """
 import gc
-import json
 import os
 import random
 import threading
@@ -15,11 +14,12 @@ import gradio as gr
 import torch
 
 from engine import PRECISIONS, EngineError, LocalIdol, bitsandbytes_available, gpu_info, resolve_auto
+from presets import load_presets
 
 APP_DIR = Path(__file__).parent
 OUTPUT_DIR = APP_DIR / 'outputs'
 OUTPUT_DIR.mkdir(exist_ok=True)
-PRESETS = json.loads((APP_DIR / 'examples' / 'presets.json').read_text(encoding='utf-8'))
+PRESETS = load_presets(APP_DIR)
 
 MODES = {'Objet synthétique (rendu, image générée)': 'synthetic', 'Photo réelle': 'real'}
 MODE_LABEL = {v: k for k, v in MODES.items()}
@@ -58,7 +58,13 @@ class Manager:
             self.key = None
             gc.collect()
             torch.cuda.empty_cache()
-        self.engine = LocalIdol(precision=precision, low_vram=low_vram, log=log)
+        try:
+            self.engine = LocalIdol(precision=precision, low_vram=low_vram, log=log)
+        except BaseException:
+            # Chargement échoué (réseau, OOM...) : rien ne doit rester en VRAM.
+            gc.collect()
+            torch.cuda.empty_cache()
+            raise
         self.key = key
         return self.engine
 
@@ -131,21 +137,30 @@ def generate(image, input_type, steps, cfg_strength, rescale_t, seed, randomize,
 
     def log(msg):
         logs.append(msg)
-        progress(0.0, desc=msg)
+        progress(state['frac'], desc=msg)
 
+    state = {'frac': 0.0}
     t0 = time.time()
     with MANAGER.lock:
         try:
             engine = MANAGER.get(prec, low, log)
-            progress(0.5, desc='Génération en cours...')
+            state['frac'] = 0.4
+            progress(0.4, desc='Modèle prêt, génération...')
+
+            def on_step(i, n):
+                state['frac'] = 0.45 + 0.45 * (i + 1) / n
+                progress(state['frac'], desc=f'Étape {i + 1} / {n}')
+
             output = engine(image, mode=MODES.get(input_type, input_type), seed=seed, steps=steps,
-                            cfg_strength=cfg_strength, rescale_t=rescale_t, num_gaussians=GAUSSIANS.get(gaussians, gaussians))
+                            cfg_strength=cfg_strength, rescale_t=rescale_t,
+                            num_gaussians=GAUSSIANS.get(gaussians, gaussians), on_step=on_step)
         except EngineError as e:
             raise gr.Error(str(e))
         except torch.OutOfMemoryError:
+            gc.collect()
             torch.cuda.empty_cache()
-            raise gr.Error('Mémoire GPU insuffisante. Essayez la précision INT8 ou NF4, passez la mémoire en '
-                           '« Économique », ou réduisez le nombre de Gaussiennes.')
+            raise gr.Error('Mémoire GPU insuffisante (chargement ou génération). Essayez la précision INT8 ou '
+                           'NF4, passez la mémoire en « Économique », ou réduisez le nombre de Gaussiennes.')
         ply = OUTPUT_DIR / f'idol-{time.strftime("%Y%m%d-%H%M%S")}-seed{seed}.ply'
         output.gaussian.save_ply(str(ply))
     elapsed = time.time() - t0
@@ -209,15 +224,33 @@ with gr.Blocks(title='Idol · local', theme=THEME, css=CSS) as demo:
             input_type = gr.Radio(list(MODES), value=MODE_LABEL[PRESETS[0]['mode']], label='Type d\'entrée')
             run_btn = gr.Button('Générer', variant='primary', elem_id='generate')
             with gr.Accordion('Paramètres', open=False):
-                gaussians = gr.Dropdown(list(GAUSSIANS), value='262 144', label='Gaussiennes')
-                steps = gr.Slider(10, 100, value=50, step=1, label='Étapes')
-                cfg_strength = gr.Slider(0.0, 10.0, value=3.0, step=0.1, label='Guidage')
-                rescale_t = gr.Slider(1.0, 6.0, value=3.0, step=0.1, label='Décalage temporel')
-                seed = gr.Number(value=42, precision=0, label='Graine')
-                randomize = gr.Checkbox(value=False, label='Graine aléatoire')
+                gaussians = gr.Dropdown(list(GAUSSIANS), value='262 144', label='Gaussiennes',
+                                        info='Nombre de points 3D de l\'objet. **Plus** = plus de détails, '
+                                             'mais plus de VRAM, de temps et de poids de fichier. 262 144 par défaut.')
+                steps = gr.Slider(10, 100, value=50, step=1, label='Étapes',
+                                  info='Étapes de l\'algorithme de génération. **Plus** = qualité légèrement '
+                                       'meilleure (marges décroissantes) et temps plus long. 50 par défaut.')
+                cfg_strength = gr.Slider(0.0, 10.0, value=3.0, step=0.1, label='Guidage',
+                                        info='Force du guidage par rapport à l\'image d\'entrée (CFG) : '
+                                             '0 = l\'image guide à peine · **3 = recommandé** · '
+                                             'très élevé = sur-respect pouvant créer des artefacts.')
+                rescale_t = gr.Slider(1.0, 6.0, value=3.0, step=0.1, label='Décalage temporel',
+                                      info='Répartit les étapes vers le début de la génération (bruit fort = '
+                                           'structure générale de l\'objet) : 1 = uniforme · **3 = recommandé** · '
+                                           '6 = très concentré sur la structure.')
+                seed = gr.Number(value=42, precision=0, label='Graine',
+                                 info='Aléatoire de départ : mêmes réglages + même graine = **exactement le même '
+                                      'objet**. Changez-la pour obtenir une autre variante.')
+                randomize = gr.Checkbox(value=False, label='Graine aléatoire',
+                                        info='Ignore le champ Graine et en tire une nouvelle à chaque génération.')
             with gr.Accordion('Modèle et mémoire GPU', open=False):
-                precision = gr.Dropdown(PRECISION_CHOICES, value='auto', label='Précision (quantification)')
-                memory = gr.Radio(MEMORY_CHOICES, value='auto', label='Mémoire GPU')
+                precision = gr.Dropdown(PRECISION_CHOICES, value='auto', label='Précision (quantification)',
+                                        info='Auto = FP16 (qualité maximale). INT8/NF4 réduisent la VRAM nécessaire '
+                                             '(qualité très proche en INT8, légèrement réduite en NF4).')
+                memory = gr.Radio(MEMORY_CHOICES, value='auto', label='Mémoire GPU',
+                                  info='Auto = standard au-dessus de 12 Go de VRAM, économique en dessous. '
+                                       'Économique décharge les modules entre les étapes : moins de VRAM, '
+                                       'un peu plus lent.')
                 gr.Markdown(hardware_text())
                 status = gr.Markdown(MANAGER.describe())
                 gr.Markdown('Changer la précision ou la mémoire recharge le modèle (environ 30 s). '
