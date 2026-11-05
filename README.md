@@ -56,8 +56,15 @@ Pour forcer une source, définissez `IDOL_ENCODER_SOURCE=official` ou `IDOL_ENCO
 |---|---|
 | **Précision** | Format des poids. *Auto* choisit FP16 (voir ci-dessous). |
 | **Mémoire GPU** | *Auto* : mode économique sous 12 Go de VRAM. *Économique* décharge les modules entre les étapes. |
-| Gaussiennes | Plus de Gaussiennes = plus de détails, plus de VRAM et de temps. 262 144 par défaut. |
-| Étapes, guidage, décalage temporel, graine | Mêmes paramètres que la démo officielle. |
+| **Gaussiennes** | Nombre de points 3D formant l'objet. Plus = plus de détails, mais plus de VRAM, de temps et de poids de fichier. 262 144 par défaut. |
+| **Étapes** | Étapes de l'algorithme de génération. Plus = qualité légèrement meilleure (marges décroissantes) et temps proportionnellement plus long. 50 par défaut. |
+| **Guidage** | Force du guidage par rapport à l'image d'entrée (CFG). 0 = l'image guide à peine · 3 = recommandé · très élevé = sur-respect pouvant créer des artefacts. |
+| **Décalage temporel** | Répartit les étapes vers le début de la génération (bruit fort = structure générale de l'objet). 1 = réparti uniformément · 3 = recommandé · 6 = très concentré sur la structure. |
+| **Graine** | Aléatoire de départ : mêmes réglages + même graine = exactement le même objet. Changez-la pour obtenir une autre variante. |
+| **Graine aléatoire** | Ignore le champ *Graine* et en tire une nouvelle à chaque génération. |
+
+Tous ces réglages (hors *Précision* / *Mémoire GPU*) sont ceux de la démo officielle ; une explication
+s'affiche aussi directement sous chaque libellé dans l'interface.
 
 Changer la précision ou le mode mémoire recharge le modèle (environ 30 s).
 
